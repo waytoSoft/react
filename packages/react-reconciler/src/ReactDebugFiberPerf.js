@@ -16,6 +16,7 @@ import {
   HostComponent,
   HostText,
   HostPortal,
+  CallComponent,
   ReturnComponent,
   Fragment,
 } from 'shared/ReactTypeOfWork';
@@ -58,6 +59,7 @@ let hasScheduledUpdateInCurrentCommit: boolean = false;
 let hasScheduledUpdateInCurrentPhase: boolean = false;
 let commitCountInCurrentWorkLoop: number = 0;
 let effectCountInCurrentCommit: number = 0;
+let isWaitingForCallback: boolean = false;
 // During commits, we only show a measurement once per method name
 // to avoid stretch the commit phase with measurement overhead.
 const labelsInCurrentCommit: Set<string> = new Set();
@@ -165,6 +167,7 @@ const shouldIgnoreFiber = (fiber: Fiber): boolean => {
     case HostComponent:
     case HostText:
     case HostPortal:
+    case CallComponent:
     case ReturnComponent:
     case Fragment:
       return true;
@@ -227,6 +230,29 @@ export function recordScheduleUpdate(): void {
       currentPhase !== 'componentWillReceiveProps'
     ) {
       hasScheduledUpdateInCurrentPhase = true;
+    }
+  }
+}
+
+export function startRequestCallbackTimer(): void {
+  if (enableUserTimingAPI) {
+    if (supportsUserTiming && !isWaitingForCallback) {
+      isWaitingForCallback = true;
+      beginMark('(Waiting for async callback...)');
+    }
+  }
+}
+
+export function stopRequestCallbackTimer(didExpire: boolean): void {
+  if (enableUserTimingAPI) {
+    if (supportsUserTiming) {
+      isWaitingForCallback = false;
+      const warning = didExpire ? 'React was blocked by main thread' : null;
+      endMark(
+        '(Waiting for async callback...)',
+        '(Waiting for async callback...)',
+        warning,
+      );
     }
   }
 }

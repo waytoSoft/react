@@ -70,15 +70,15 @@ class ReactShallowRenderer {
 
     this._rendering = true;
     this._element = element;
-    this._context = context;
+    this._context = getMaskedContext(element.type.contextTypes, context);
 
     if (this._instance) {
-      this._updateClassComponent(element.type, element.props, context);
+      this._updateClassComponent(element.type, element.props, this._context);
     } else {
       if (shouldConstruct(element.type)) {
         this._instance = new element.type(
           element.props,
-          context,
+          this._context,
           this._updater,
         );
 
@@ -87,7 +87,7 @@ class ReactShallowRenderer {
 
           checkPropTypes(
             element.type.contextTypes,
-            context,
+            this._context,
             'context',
             getName(element.type, this._instance),
             getStackAddendum,
@@ -96,13 +96,14 @@ class ReactShallowRenderer {
           currentlyValidatingElement = null;
         }
 
-        this._mountClassComponent(element.props, context);
+        this._mountClassComponent(element.props, this._context);
       } else {
-        this._rendered = element.type(element.props, context);
+        this._rendered = element.type(element.props, this._context);
       }
     }
 
     this._rendering = false;
+    this._updater._invokeCallbacks();
 
     return this.getRenderOutput();
   }
@@ -124,7 +125,7 @@ class ReactShallowRenderer {
   _mountClassComponent(props, context) {
     this._instance.context = context;
     this._instance.props = props;
-    this._instance.state = this._instance.state || emptyObject;
+    this._instance.state = this._instance.state || null;
     this._instance.updater = this._updater;
 
     if (typeof this._instance.componentWillMount === 'function') {
@@ -192,6 +193,25 @@ class ReactShallowRenderer {
 class Updater {
   constructor(renderer) {
     this._renderer = renderer;
+    this._callbacks = [];
+  }
+
+  _enqueueCallback(callback, publicInstance) {
+    if (typeof callback === 'function' && publicInstance) {
+      this._callbacks.push({
+        callback,
+        publicInstance,
+      });
+    }
+  }
+
+  _invokeCallbacks() {
+    const callbacks = this._callbacks;
+    this._callbacks = [];
+
+    callbacks.forEach(({callback, publicInstance}) => {
+      callback.call(publicInstance);
+    });
   }
 
   isMounted(publicInstance) {
@@ -199,24 +219,19 @@ class Updater {
   }
 
   enqueueForceUpdate(publicInstance, callback, callerName) {
+    this._enqueueCallback(callback, publicInstance);
     this._renderer._forcedUpdate = true;
     this._renderer.render(this._renderer._element, this._renderer._context);
-
-    if (typeof callback === 'function') {
-      callback.call(publicInstance);
-    }
   }
 
   enqueueReplaceState(publicInstance, completeState, callback, callerName) {
+    this._enqueueCallback(callback, publicInstance);
     this._renderer._newState = completeState;
     this._renderer.render(this._renderer._element, this._renderer._context);
-
-    if (typeof callback === 'function') {
-      callback.call(publicInstance);
-    }
   }
 
   enqueueSetState(publicInstance, partialState, callback, callerName) {
+    this._enqueueCallback(callback, publicInstance);
     const currentState = this._renderer._newState || publicInstance.state;
 
     if (typeof partialState === 'function') {
@@ -229,14 +244,10 @@ class Updater {
     };
 
     this._renderer.render(this._renderer._element, this._renderer._context);
-
-    if (typeof callback === 'function') {
-      callback.call(publicInstance);
-    }
   }
 }
 
-var currentlyValidatingElement = null;
+let currentlyValidatingElement = null;
 
 function getDisplayName(element) {
   if (element == null) {
@@ -251,10 +262,10 @@ function getDisplayName(element) {
 }
 
 function getStackAddendum() {
-  var stack = '';
+  let stack = '';
   if (currentlyValidatingElement) {
-    var name = getDisplayName(currentlyValidatingElement);
-    var owner = currentlyValidatingElement._owner;
+    const name = getDisplayName(currentlyValidatingElement);
+    const owner = currentlyValidatingElement._owner;
     stack += describeComponentFrame(
       name,
       currentlyValidatingElement._source,
@@ -265,7 +276,7 @@ function getStackAddendum() {
 }
 
 function getName(type, instance) {
-  var constructor = instance && instance.constructor;
+  const constructor = instance && instance.constructor;
   return (
     type.displayName ||
     (constructor && constructor.displayName) ||
@@ -277,6 +288,17 @@ function getName(type, instance) {
 
 function shouldConstruct(Component) {
   return !!(Component.prototype && Component.prototype.isReactComponent);
+}
+
+function getMaskedContext(contextTypes, unmaskedContext) {
+  if (!contextTypes) {
+    return emptyObject;
+  }
+  const context = {};
+  for (let key in contextTypes) {
+    context[key] = unmaskedContext[key];
+  }
+  return context;
 }
 
 export default ReactShallowRenderer;

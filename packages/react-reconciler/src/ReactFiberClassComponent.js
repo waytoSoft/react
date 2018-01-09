@@ -11,8 +11,11 @@ import type {Fiber} from './ReactFiber';
 import type {ExpirationTime} from './ReactFiberExpirationTime';
 
 import {Update} from 'shared/ReactTypeOfSideEffect';
-import {enableAsyncSubtreeAPI} from 'shared/ReactFeatureFlags';
-import {isMounted} from 'shared/ReactFiberTreeReflection';
+import {
+  debugRenderPhaseSideEffects,
+  enableAsyncSubtreeAPI,
+} from 'shared/ReactFeatureFlags';
+import {isMounted} from 'react-reconciler/reflection';
 import * as ReactInstanceMap from 'shared/ReactInstanceMap';
 import emptyObject from 'fbjs/lib/emptyObject';
 import getComponentName from 'shared/getComponentName';
@@ -37,17 +40,28 @@ import {hasContextChanged} from './ReactFiberContext';
 const fakeInternalInstance = {};
 const isArray = Array.isArray;
 
-if (__DEV__) {
-  var didWarnAboutStateAssignmentForComponent = {};
+let didWarnAboutStateAssignmentForComponent;
+let warnOnInvalidCallback;
 
-  var warnOnInvalidCallback = function(callback: mixed, callerName: string) {
-    warning(
-      callback === null || typeof callback === 'function',
-      '%s(...): Expected the last optional `callback` argument to be a ' +
-        'function. Instead received: %s.',
-      callerName,
-      callback,
-    );
+if (__DEV__) {
+  const didWarnOnInvalidCallback = {};
+  didWarnAboutStateAssignmentForComponent = {};
+
+  warnOnInvalidCallback = function(callback: mixed, callerName: string) {
+    if (callback === null || typeof callback === 'function') {
+      return;
+    }
+    const key = `${callerName}_${(callback: any)}`;
+    if (!didWarnOnInvalidCallback[key]) {
+      warning(
+        false,
+        '%s(...): Expected the last optional `callback` argument to be a ' +
+          'function. Instead received: %s.',
+        callerName,
+        callback,
+      );
+      didWarnOnInvalidCallback[key] = true;
+    }
   };
 
   // This is so gross but it's at least non-critical and can be removed if
@@ -167,6 +181,11 @@ export default function(
         newContext,
       );
       stopPhaseTimer();
+
+      // Simulate an async bailout/interruption by invoking lifecycle twice.
+      if (debugRenderPhaseSideEffects) {
+        instance.shouldComponentUpdate(newProps, newState, newContext);
+      }
 
       if (__DEV__) {
         warning(
@@ -320,14 +339,14 @@ export default function(
 
     const state = instance.state;
     if (state && (typeof state !== 'object' || isArray(state))) {
-      invariant(
+      warning(
         false,
         '%s.state: must be set to an object or null',
         getComponentName(workInProgress),
       );
     }
     if (typeof instance.getChildContext === 'function') {
-      invariant(
+      warning(
         typeof workInProgress.type.childContextTypes === 'object',
         '%s.getChildContext(): childContextTypes must be defined in order to ' +
           'use getChildContext().',
@@ -374,7 +393,6 @@ export default function(
     startPhaseTimer(workInProgress, 'componentWillMount');
     const oldState = instance.state;
     instance.componentWillMount();
-
     stopPhaseTimer();
 
     if (oldState !== instance.state) {
@@ -401,6 +419,11 @@ export default function(
     const oldState = instance.state;
     instance.componentWillReceiveProps(newProps, newContext);
     stopPhaseTimer();
+
+    // Simulate an async bailout/interruption by invoking lifecycle twice.
+    if (debugRenderPhaseSideEffects) {
+      instance.componentWillReceiveProps(newProps, newContext);
+    }
 
     if (instance.state !== oldState) {
       if (__DEV__) {
@@ -433,14 +456,7 @@ export default function(
 
     const instance = workInProgress.stateNode;
     const state = instance.state || null;
-
-    let props = workInProgress.pendingProps;
-    invariant(
-      props,
-      'There must be pending props for an initial mount. This error is ' +
-        'likely caused by a bug in React. Please file an issue.',
-    );
-
+    const props = workInProgress.pendingProps;
     const unmaskedContext = getUnmaskedContext(workInProgress);
 
     instance.props = props;
@@ -593,17 +609,7 @@ export default function(
     resetInputPointers(workInProgress, instance);
 
     const oldProps = workInProgress.memoizedProps;
-    let newProps = workInProgress.pendingProps;
-    if (!newProps) {
-      // If there aren't any new props, then we'll reuse the memoized props.
-      // This could be from already completed work.
-      newProps = oldProps;
-      invariant(
-        newProps != null,
-        'There should always be pending or memoized props. This error is ' +
-          'likely caused by a bug in React. Please file an issue.',
-      );
-    }
+    const newProps = workInProgress.pendingProps;
     const oldContext = instance.context;
     const newUnmaskedContext = getUnmaskedContext(workInProgress);
     const newContext = getMaskedContext(workInProgress, newUnmaskedContext);
@@ -677,6 +683,11 @@ export default function(
         startPhaseTimer(workInProgress, 'componentWillUpdate');
         instance.componentWillUpdate(newProps, newState, newContext);
         stopPhaseTimer();
+
+        // Simulate an async bailout/interruption by invoking lifecycle twice.
+        if (debugRenderPhaseSideEffects) {
+          instance.componentWillUpdate(newProps, newState, newContext);
+        }
       }
       if (typeof instance.componentDidUpdate === 'function') {
         workInProgress.effectTag |= Update;

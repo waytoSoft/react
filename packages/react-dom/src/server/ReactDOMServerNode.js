@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import '../shared/ReactDOMInjection';
 import ReactVersion from 'shared/ReactVersion';
 
 import {renderToString, renderToStaticMarkup} from './ReactDOMStringRenderer';
@@ -14,11 +13,11 @@ import {
   renderToStaticNodeStream,
 } from './ReactDOMNodeStreamRenderer';
 
-export {
+// Note: when changing this, also consider https://github.com/facebook/react/issues/11526
+export default {
   renderToString,
   renderToStaticMarkup,
   renderToNodeStream,
   renderToStaticNodeStream,
+  version: ReactVersion,
 };
-
-export const version = ReactVersion;

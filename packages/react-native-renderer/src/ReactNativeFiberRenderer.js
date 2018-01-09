@@ -177,6 +177,7 @@ const NativeRenderer = ReactFiberReconciler({
   },
 
   scheduleDeferredCallback: ReactNativeFrameScheduling.scheduleDeferredCallback,
+  cancelDeferredCallback: ReactNativeFrameScheduling.cancelDeferredCallback,
 
   shouldDeprioritizeSubtree(type: string, props: Props): boolean {
     return false;
@@ -191,8 +192,6 @@ const NativeRenderer = ReactFiberReconciler({
     // More context @ github.com/facebook/react/pull/8560#discussion_r92111303
     return false;
   },
-
-  useSyncScheduling: true,
 
   mutation: {
     appendChild(

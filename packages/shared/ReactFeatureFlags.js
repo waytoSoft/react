@@ -10,9 +10,6 @@
 import invariant from 'fbjs/lib/invariant';
 
 export const enableAsyncSubtreeAPI = true;
-export const enableAsyncSchedulingByDefaultInReactDOM = false;
-// Exports React.Fragment
-export const enableReactFragment = false;
 // Exports ReactDOM.createRoot
 export const enableCreateRoot = false;
 export const enableUserTimingAPI = __DEV__;
@@ -23,6 +20,9 @@ export const enableMutatingReconciler = true;
 export const enableNoopReconciler = false;
 // Experimental persistent mode (CS):
 export const enablePersistentReconciler = false;
+
+// Helps identify side effects in begin-phase lifecycle hooks and setState reducers:
+export const debugRenderPhaseSideEffects = false;
 
 // Only used in www builds.
 export function addUserTimingListener() {

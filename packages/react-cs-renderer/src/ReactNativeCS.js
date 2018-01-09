@@ -43,7 +43,7 @@ const infiniteDeadline = {
 };
 
 const arePropsEqual = (oldProps: Props, newProps: Props): boolean => {
-  var key;
+  let key;
   for (key in newProps) {
     if (key === 'children') {
       // Skip special case.
@@ -168,14 +168,19 @@ const ReactNativeCSFiberRenderer = ReactFiberReconciler({
     if (scheduleUpdate !== null) {
       scheduleUpdate(identityUpdater);
     }
+    return 0;
+  },
+
+  cancelDeferredCallback() {
+    // Noop. This is always called right before scheduling a new update, so
+    // should be fine. This renderer won't use requestIdleCallback, anyway.
+    // Will switch to use shouldYield() API instead.
   },
 
   shouldSetTextContent(type: string, props: Props): boolean {
     // TODO: Figure out when we should allow text content.
     return false;
   },
-
-  useSyncScheduling: false,
 
   now(): number {
     // TODO: Enable expiration by implementing this method.
@@ -258,7 +263,11 @@ const ReactCS = CSStatefulComponent({
     let container = {
       pendingChild: null,
     };
-    let root = ReactNativeCSFiberRenderer.createContainer(container, false);
+    let root = ReactNativeCSFiberRenderer.createContainer(
+      container,
+      false,
+      false,
+    );
     return {root, container};
   },
   render({

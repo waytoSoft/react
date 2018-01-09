@@ -10,10 +10,16 @@
 import type {ReactNativeRTType} from './ReactNativeRTTypes';
 import type {ReactNodeList} from 'shared/ReactTypes';
 
-// TODO: direct imports like some-package/src/* are bad. Fix me.
-import * as ReactFiberErrorLogger from 'react-reconciler/src/ReactFiberErrorLogger';
-import {showDialog} from 'react-native-renderer/src/ReactNativeFiberErrorDialog';
-import * as ReactPortal from 'react-reconciler/src/ReactPortal';
+/**
+ * Make sure essential globals are available and are patched correctly. Please don't remove this
+ * line. Bundles created by react-packager `require` it before executing any application code. This
+ * ensures it exists in the dependency graph and can be `require`d.
+ * TODO: require this in packager, not in React #10932517
+ */
+import 'InitializeCore';
+import './ReactNativeRTEventEmitter';
+
+import * as ReactPortal from 'shared/ReactPortal';
 import * as ReactGenericBatching from 'events/ReactGenericBatching';
 import ReactVersion from 'shared/ReactVersion';
 
@@ -21,25 +27,11 @@ import {getFiberFromTag} from './ReactNativeRTComponentTree';
 import ReactNativeRTFiberRenderer from './ReactNativeRTFiberRenderer';
 import ReactNativeRTFiberInspector from './ReactNativeRTFiberInspector';
 
-/**
- * Make sure essential globals are available and are patched correctly. Please don't remove this
- * line. Bundles created by react-packager `require` it before executing any application code. This
- * ensures it exists in the dependency graph and can be `require`d.
- * TODO: require this in packager, not in React #10932517
- */
-require('InitializeCore');
-
-require('./ReactNativeRTEventEmitter');
-
 ReactGenericBatching.injection.injectFiberBatchedUpdates(
   ReactNativeRTFiberRenderer.batchedUpdates,
 );
 
 const roots = new Map();
-
-// Intercept lifecycle errors and ensure they are shown with the correct stack
-// trace within the native redbox component.
-ReactFiberErrorLogger.injection.injectDialog(showDialog);
 
 const ReactNativeRTFiber: ReactNativeRTType = {
   render(element: React$Element<any>, containerTag: any, callback: ?Function) {
@@ -48,7 +40,11 @@ const ReactNativeRTFiber: ReactNativeRTType = {
     if (!root) {
       // TODO (bvaughn): If we decide to keep the wrapper component,
       // We could create a wrapper for containerTag as well to reduce special casing.
-      root = ReactNativeRTFiberRenderer.createContainer(containerTag, false);
+      root = ReactNativeRTFiberRenderer.createContainer(
+        containerTag,
+        false,
+        false,
+      );
       roots.set(containerTag, root);
     }
     ReactNativeRTFiberRenderer.updateContainer(element, root, null, callback);

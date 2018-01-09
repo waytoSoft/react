@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
+ * @jest-environment node
  */
 
 'use strict';
@@ -215,6 +216,9 @@ describe('ReactShallowRenderer', () => {
         </div>
       );
     }
+    SomeComponent.contextTypes = {
+      bar: PropTypes.string,
+    };
 
     const shallowRenderer = createRenderer();
     const result = shallowRenderer.render(<SomeComponent foo={'FOO'} />, {
@@ -427,6 +431,9 @@ describe('ReactShallowRenderer', () => {
         super(props, context);
         this.state = initialState;
       }
+      static contextTypes = {
+        context: PropTypes.string,
+      };
       componentDidUpdate(...args) {
         componentDidUpdateParams.push(...args);
       }
@@ -769,9 +776,25 @@ describe('ReactShallowRenderer', () => {
     expect(result).toEqual(<div>foo:baz</div>);
   });
 
-  it('can fail context when shallowly rendering', () => {
-    spyOn(console, 'error');
+  it('should filter context by contextTypes', () => {
+    class SimpleComponent extends React.Component {
+      static contextTypes = {
+        foo: PropTypes.string,
+      };
+      render() {
+        return <div>{`${this.context.foo}:${this.context.bar}`}</div>;
+      }
+    }
 
+    const shallowRenderer = createRenderer();
+    let result = shallowRenderer.render(<SimpleComponent />, {
+      foo: 'foo',
+      bar: 'bar',
+    });
+    expect(result).toEqual(<div>foo:undefined</div>);
+  });
+
+  it('can fail context when shallowly rendering', () => {
     class SimpleComponent extends React.Component {
       static contextTypes = {
         name: PropTypes.string.isRequired,
@@ -783,11 +806,7 @@ describe('ReactShallowRenderer', () => {
     }
 
     const shallowRenderer = createRenderer();
-    shallowRenderer.render(<SimpleComponent />);
-    expectDev(console.error.calls.count()).toBe(1);
-    expect(
-      console.error.calls.argsFor(0)[0].replace(/\(at .+?:\d+\)/g, '(at **)'),
-    ).toBe(
+    expect(() => shallowRenderer.render(<SimpleComponent />)).toWarnDev(
       'Warning: Failed context type: The context `name` is marked as ' +
         'required in `SimpleComponent`, but its value is `undefined`.\n' +
         '    in SimpleComponent (at **)',
@@ -795,8 +814,6 @@ describe('ReactShallowRenderer', () => {
   });
 
   it('should warn about propTypes (but only once)', () => {
-    spyOn(console, 'error');
-
     class SimpleComponent extends React.Component {
       render() {
         return React.createElement('div', null, this.props.name);
@@ -808,12 +825,9 @@ describe('ReactShallowRenderer', () => {
     };
 
     const shallowRenderer = createRenderer();
-    shallowRenderer.render(React.createElement(SimpleComponent, {name: 123}));
-
-    expect(console.error.calls.count()).toBe(1);
-    expect(
-      console.error.calls.argsFor(0)[0].replace(/\(at .+?:\d+\)/g, '(at **)'),
-    ).toBe(
+    expect(() =>
+      shallowRenderer.render(React.createElement(SimpleComponent, {name: 123})),
+    ).toWarnDev(
       'Warning: Failed prop type: Invalid prop `name` of type `number` ' +
         'supplied to `SimpleComponent`, expected `string`.\n' +
         '    in SimpleComponent',
@@ -845,35 +859,129 @@ describe('ReactShallowRenderer', () => {
     expect(result).toEqual(<div>baz:bar</div>);
   });
 
-  it('throws usefully when rendering badly-typed elements', () => {
-    spyOn(console, 'error');
+  it('this.state should be updated on setState callback inside componentWillMount', () => {
+    let stateSuccessfullyUpdated = false;
+
+    class Component extends React.Component {
+      constructor(props, context) {
+        super(props, context);
+        this.state = {
+          hasUpdatedState: false,
+        };
+      }
+
+      componentWillMount() {
+        this.setState(
+          {hasUpdatedState: true},
+          () => (stateSuccessfullyUpdated = this.state.hasUpdatedState),
+        );
+      }
+
+      render() {
+        return <div>{this.props.children}</div>;
+      }
+    }
+
+    const shallowRenderer = createRenderer();
+    shallowRenderer.render(<Component />);
+    expect(stateSuccessfullyUpdated).toBe(true);
+  });
+
+  it('should handle multiple callbacks', () => {
+    const mockFn = jest.fn();
     const shallowRenderer = createRenderer();
 
-    var Undef = undefined;
-    expect(() => shallowRenderer.render(<Undef />)).toThrowError(
-      'ReactShallowRenderer render(): Shallow rendering works only with custom ' +
-        'components, but the provided element type was `undefined`.',
-    );
+    class Component extends React.Component {
+      constructor(props, context) {
+        super(props, context);
+        this.state = {
+          foo: 'foo',
+        };
+      }
 
-    var Null = null;
-    expect(() => shallowRenderer.render(<Null />)).toThrowError(
-      'ReactShallowRenderer render(): Shallow rendering works only with custom ' +
-        'components, but the provided element type was `null`.',
-    );
+      componentWillMount() {
+        this.setState({foo: 'bar'}, () => mockFn());
+        this.setState({foo: 'foobar'}, () => mockFn());
+      }
 
-    var Arr = [];
-    expect(() => shallowRenderer.render(<Arr />)).toThrowError(
-      'ReactShallowRenderer render(): Shallow rendering works only with custom ' +
-        'components, but the provided element type was `array`.',
-    );
+      render() {
+        return <div>{this.state.foo}</div>;
+      }
+    }
 
-    var Obj = {};
-    expect(() => shallowRenderer.render(<Obj />)).toThrowError(
-      'ReactShallowRenderer render(): Shallow rendering works only with custom ' +
-        'components, but the provided element type was `object`.',
-    );
+    shallowRenderer.render(<Component />);
 
-    // One warning for each element creation
-    expectDev(console.error.calls.count()).toBe(4);
+    expect(mockFn.mock.calls.length).toBe(2);
+
+    // Ensure the callback queue is cleared after the callbacks are invoked
+    const mountedInstance = shallowRenderer.getMountedInstance();
+    mountedInstance.setState({foo: 'bar'}, () => mockFn());
+    expect(mockFn.mock.calls.length).toBe(3);
+  });
+
+  it('should call the setState callback even if shouldComponentUpdate = false', done => {
+    const mockFn = jest.fn().mockReturnValue(false);
+
+    class Component extends React.Component {
+      constructor(props, context) {
+        super(props, context);
+        this.state = {
+          hasUpdatedState: false,
+        };
+      }
+
+      shouldComponentUpdate() {
+        return mockFn();
+      }
+
+      render() {
+        return <div>{this.state.hasUpdatedState}</div>;
+      }
+    }
+
+    const shallowRenderer = createRenderer();
+    shallowRenderer.render(<Component />);
+
+    const mountedInstance = shallowRenderer.getMountedInstance();
+    mountedInstance.setState({hasUpdatedState: true}, () => {
+      expect(mockFn).toBeCalled();
+      expect(mountedInstance.state.hasUpdatedState).toBe(true);
+      done();
+    });
+  });
+
+  it('throws usefully when rendering badly-typed elements', () => {
+    const shallowRenderer = createRenderer();
+
+    const renderAndVerifyWarningAndError = (Component, typeString) => {
+      expect(() => {
+        expect(() => shallowRenderer.render(<Component />)).toWarnDev(
+          'React.createElement: type is invalid -- expected a string ' +
+            '(for built-in components) or a class/function (for composite components) ' +
+            `but got: ${typeString}.`,
+        );
+      }).toThrowError(
+        'ReactShallowRenderer render(): Shallow rendering works only with custom ' +
+          `components, but the provided element type was \`${typeString}\`.`,
+      );
+    };
+
+    renderAndVerifyWarningAndError(undefined, 'undefined');
+    renderAndVerifyWarningAndError(null, 'null');
+    renderAndVerifyWarningAndError([], 'array');
+    renderAndVerifyWarningAndError({}, 'object');
+  });
+
+  it('should have initial state of null if not defined', () => {
+    class SomeComponent extends React.Component {
+      render() {
+        return <span />;
+      }
+    }
+
+    const shallowRenderer = createRenderer();
+    shallowRenderer.render(<SomeComponent />);
+
+    expect(shallowRenderer.getMountedInstance().state).toBeNull();
   });
 });

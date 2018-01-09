@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  *
  * @emails react-core
+ * @jest-environment node
  */
 
 'use strict';
 
-var PropTypes;
-var React;
-var ReactNoop;
+let PropTypes;
+let React;
+let ReactNoop;
 
 describe('ReactIncrementalErrorHandling', () => {
   beforeEach(() => {
@@ -60,7 +61,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('catches render error in a boundary during partial deferred mounting', () => {
-    var ops = [];
+    const ops = [];
     class ErrorBoundary extends React.Component {
       state = {error: null};
       componentDidCatch(error) {
@@ -105,7 +106,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('catches render error in a boundary during synchronous mounting', () => {
-    var ops = [];
+    const ops = [];
     class ErrorBoundary extends React.Component {
       state = {error: null};
       componentDidCatch(error) {
@@ -147,7 +148,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('catches render error in a boundary during batched mounting', () => {
-    var ops = [];
+    const ops = [];
     class ErrorBoundary extends React.Component {
       state = {error: null};
       componentDidCatch(error) {
@@ -190,7 +191,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('propagates an error from a noop error boundary during full deferred mounting', () => {
-    var ops = [];
+    const ops = [];
     class RethrowErrorBoundary extends React.Component {
       componentDidCatch(error) {
         ops.push('RethrowErrorBoundary componentDidCatch');
@@ -225,7 +226,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('propagates an error from a noop error boundary during partial deferred mounting', () => {
-    var ops = [];
+    const ops = [];
     class RethrowErrorBoundary extends React.Component {
       componentDidCatch(error) {
         ops.push('RethrowErrorBoundary componentDidCatch');
@@ -263,7 +264,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('propagates an error from a noop error boundary during synchronous mounting', () => {
-    var ops = [];
+    const ops = [];
     class RethrowErrorBoundary extends React.Component {
       componentDidCatch(error) {
         ops.push('RethrowErrorBoundary componentDidCatch');
@@ -298,7 +299,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('propagates an error from a noop error boundary during batched mounting', () => {
-    var ops = [];
+    const ops = [];
     class RethrowErrorBoundary extends React.Component {
       componentDidCatch(error) {
         ops.push('RethrowErrorBoundary componentDidCatch');
@@ -380,7 +381,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('can schedule updates after uncaught error in render on mount', () => {
-    var ops = [];
+    let ops = [];
 
     function BrokenRender() {
       ops.push('BrokenRender');
@@ -405,7 +406,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('can schedule updates after uncaught error in render on update', () => {
-    var ops = [];
+    let ops = [];
 
     function BrokenRender(props) {
       ops.push('BrokenRender');
@@ -437,7 +438,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('can schedule updates after uncaught error during umounting', () => {
-    var ops = [];
+    let ops = [];
 
     class BrokenComponentWillUnmount extends React.Component {
       render() {
@@ -719,8 +720,6 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('catches reconciler errors in a boundary during mounting', () => {
-    spyOn(console, 'error');
-
     class ErrorBoundary extends React.Component {
       state = {error: null};
       componentDidCatch(error) {
@@ -743,21 +742,23 @@ describe('ReactIncrementalErrorHandling', () => {
         <BrokenRender />
       </ErrorBoundary>,
     );
-    ReactNoop.flush();
+    expect(ReactNoop.flush).toWarnDev(
+      'Warning: React.createElement: type is invalid -- expected a string',
+    );
     expect(ReactNoop.getChildren()).toEqual([
       span(
         'Element type is invalid: expected a string (for built-in components) or ' +
-          'a class/function (for composite components) but got: undefined. ' +
-          "You likely forgot to export your component from the file it's " +
-          'defined in.\n\nCheck the render method of `BrokenRender`.',
+          'a class/function (for composite components) but got: undefined.' +
+          (__DEV__
+            ? " You likely forgot to export your component from the file it's " +
+              'defined in, or you might have mixed up default and named imports.' +
+              '\n\nCheck the render method of `BrokenRender`.'
+            : ''),
       ),
     ]);
-    expect(console.error.calls.count()).toBe(1);
   });
 
   it('catches reconciler errors in a boundary during update', () => {
-    spyOn(console, 'error');
-
     class ErrorBoundary extends React.Component {
       state = {error: null};
       componentDidCatch(error) {
@@ -788,29 +789,34 @@ describe('ReactIncrementalErrorHandling', () => {
         <BrokenRender fail={true} />
       </ErrorBoundary>,
     );
-    ReactNoop.flush();
+    expect(ReactNoop.flush).toWarnDev(
+      'Warning: React.createElement: type is invalid -- expected a string',
+    );
     expect(ReactNoop.getChildren()).toEqual([
       span(
         'Element type is invalid: expected a string (for built-in components) or ' +
-          'a class/function (for composite components) but got: undefined. ' +
-          "You likely forgot to export your component from the file it's " +
-          'defined in.\n\nCheck the render method of `BrokenRender`.',
+          'a class/function (for composite components) but got: undefined.' +
+          (__DEV__
+            ? " You likely forgot to export your component from the file it's " +
+              'defined in, or you might have mixed up default and named imports.' +
+              '\n\nCheck the render method of `BrokenRender`.'
+            : ''),
       ),
     ]);
-    expect(console.error.calls.count()).toBe(1);
   });
 
   it('recovers from uncaught reconciler errors', () => {
-    spyOn(console, 'error');
     const InvalidType = undefined;
-    ReactNoop.render(<InvalidType />);
-    expect(() => {
-      ReactNoop.flush();
-    }).toThrowError(
+    expect(() => ReactNoop.render(<InvalidType />)).toWarnDev(
+      'Warning: React.createElement: type is invalid -- expected a string',
+    );
+    expect(ReactNoop.flush).toThrowError(
       'Element type is invalid: expected a string (for built-in components) or ' +
-        'a class/function (for composite components) but got: undefined. ' +
-        "You likely forgot to export your component from the file it's " +
-        'defined in.',
+        'a class/function (for composite components) but got: undefined.' +
+        (__DEV__
+          ? " You likely forgot to export your component from the file it's " +
+            'defined in, or you might have mixed up default and named imports.'
+          : ''),
     );
 
     ReactNoop.render(<span prop="hi" />);
@@ -871,7 +877,7 @@ describe('ReactIncrementalErrorHandling', () => {
   });
 
   it('does not interrupt unmounting if detaching a ref throws', () => {
-    var ops = [];
+    let ops = [];
 
     class Bar extends React.Component {
       componentWillUnmount() {
@@ -925,234 +931,5 @@ describe('ReactIncrementalErrorHandling', () => {
       throw new Error('Error!');
     });
     expect(() => ReactNoop.flush()).toThrow('Error!');
-  });
-
-  describe('ReactFiberErrorLogger', () => {
-    function initReactFiberErrorLoggerMock(mock) {
-      jest.resetModules();
-      if (mock) {
-        jest.mock('../ReactFiberErrorLogger');
-      } else {
-        jest.unmock('../ReactFiberErrorLogger');
-      }
-      React = require('react');
-      ReactNoop = require('react-noop-renderer');
-    }
-
-    function normalizeCodeLocInfo(str) {
-      return str && str.replace(/\(at .+?:\d+\)/g, '(at **)');
-    }
-
-    it('should log errors that occur during the begin phase', () => {
-      initReactFiberErrorLoggerMock();
-      spyOn(console, 'error');
-
-      class ErrorThrowingComponent extends React.Component {
-        componentWillMount() {
-          throw Error('componentWillMount error');
-        }
-        render() {
-          return <div />;
-        }
-      }
-
-      try {
-        ReactNoop.render(
-          <div>
-            <span>
-              <ErrorThrowingComponent />
-            </span>
-          </div>,
-        );
-        ReactNoop.flushDeferredPri();
-      } catch (error) {}
-
-      expect(console.error.calls.count()).toBe(1);
-      const errorMessage = console.error.calls.argsFor(0)[0];
-      expect(normalizeCodeLocInfo(errorMessage)).toContain(
-        'The above error occurred in the <ErrorThrowingComponent> component:\n' +
-          '    in ErrorThrowingComponent (at **)\n' +
-          '    in span (at **)\n' +
-          '    in div (at **)',
-      );
-      expect(errorMessage).toContain(
-        'Consider adding an error boundary to your tree to customize error handling behavior.',
-      );
-    });
-
-    it('should log errors that occur during the commit phase', () => {
-      initReactFiberErrorLoggerMock();
-      spyOn(console, 'error');
-
-      class ErrorThrowingComponent extends React.Component {
-        componentDidMount() {
-          throw Error('componentDidMount error');
-        }
-        render() {
-          return <div />;
-        }
-      }
-
-      try {
-        ReactNoop.render(
-          <div>
-            <span>
-              <ErrorThrowingComponent />
-            </span>
-          </div>,
-        );
-        ReactNoop.flushDeferredPri();
-      } catch (error) {}
-
-      expect(console.error.calls.count()).toBe(1);
-      const errorMessage = console.error.calls.argsFor(0)[0];
-      expect(normalizeCodeLocInfo(errorMessage)).toContain(
-        'The above error occurred in the <ErrorThrowingComponent> component:\n' +
-          '    in ErrorThrowingComponent (at **)\n' +
-          '    in span (at **)\n' +
-          '    in div (at **)',
-      );
-      expect(errorMessage).toContain(
-        'Consider adding an error boundary to your tree to customize error handling behavior.',
-      );
-    });
-
-    it('should ignore errors thrown in log method to prevent cycle', () => {
-      initReactFiberErrorLoggerMock(true);
-      spyOn(console, 'error');
-
-      class ErrorThrowingComponent extends React.Component {
-        render() {
-          throw Error('render error');
-        }
-      }
-
-      const logCapturedErrorCalls = [];
-
-      const ReactFiberErrorLogger = require('../ReactFiberErrorLogger');
-      ReactFiberErrorLogger.logCapturedError.mockImplementation(
-        capturedError => {
-          logCapturedErrorCalls.push(capturedError);
-          throw Error('logCapturedError error');
-        },
-      );
-
-      try {
-        ReactNoop.render(
-          <div>
-            <span>
-              <ErrorThrowingComponent />
-            </span>
-          </div>,
-        );
-        ReactNoop.flushDeferredPri();
-      } catch (error) {}
-
-      expect(logCapturedErrorCalls.length).toBe(1);
-
-      // The error thrown in logCapturedError should also be logged
-      expect(console.error.calls.count()).toBe(1);
-      expect(console.error.calls.argsFor(0)[0].message).toContain(
-        'logCapturedError error',
-      );
-    });
-
-    it('should relay info about error boundary and retry attempts if applicable', () => {
-      initReactFiberErrorLoggerMock();
-      spyOn(console, 'error');
-
-      class ParentComponent extends React.Component {
-        render() {
-          return <ErrorBoundaryComponent />;
-        }
-      }
-
-      let handleErrorCalls = [];
-      let renderAttempts = 0;
-
-      class ErrorBoundaryComponent extends React.Component {
-        componentDidCatch(error) {
-          handleErrorCalls.push(error);
-          this.setState({}); // Render again
-        }
-        render() {
-          return <ErrorThrowingComponent />;
-        }
-      }
-
-      class ErrorThrowingComponent extends React.Component {
-        componentDidMount() {
-          throw Error('componentDidMount error');
-        }
-        render() {
-          renderAttempts++;
-          return <div />;
-        }
-      }
-
-      try {
-        ReactNoop.render(<ParentComponent />);
-        ReactNoop.flush();
-      } catch (error) {}
-
-      expect(renderAttempts).toBe(2);
-      expect(handleErrorCalls.length).toBe(1);
-      expect(console.error.calls.count()).toBe(2);
-      expect(console.error.calls.argsFor(0)[0]).toContain(
-        'The above error occurred in the <ErrorThrowingComponent> component:',
-      );
-      expect(console.error.calls.argsFor(0)[0]).toContain(
-        'React will try to recreate this component tree from scratch ' +
-          'using the error boundary you provided, ErrorBoundaryComponent.',
-      );
-      expect(console.error.calls.argsFor(1)[0]).toContain(
-        'The above error occurred in the <ErrorThrowingComponent> component:',
-      );
-      expect(console.error.calls.argsFor(1)[0]).toContain(
-        'This error was initially handled by the error boundary ErrorBoundaryComponent.\n' +
-          'Recreating the tree from scratch failed so React will unmount the tree.',
-      );
-    });
-  });
-
-  it('resets instance variables before unmounting failed node', () => {
-    spyOn(console, 'error');
-
-    class ErrorBoundary extends React.Component {
-      state = {error: null};
-      componentDidCatch(error) {
-        this.setState({error});
-      }
-      render() {
-        return this.state.error ? null : this.props.children;
-      }
-    }
-    class Foo extends React.Component {
-      state = {step: 0};
-      componentDidMount() {
-        this.setState({step: 1});
-      }
-      componentWillUnmount() {
-        ReactNoop.yield('componentWillUnmount: ' + this.state.step);
-      }
-      render() {
-        ReactNoop.yield('render: ' + this.state.step);
-        if (this.state.step > 0) {
-          throw new Error('oops');
-        }
-        return null;
-      }
-    }
-
-    ReactNoop.render(
-      <ErrorBoundary>
-        <Foo />
-      </ErrorBoundary>,
-    );
-    expect(ReactNoop.flush()).toEqual([
-      'render: 0',
-      'render: 1',
-      'componentWillUnmount: 0',
-    ]);
   });
 });

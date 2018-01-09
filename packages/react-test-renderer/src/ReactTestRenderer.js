@@ -12,7 +12,7 @@ import type {FiberRoot} from 'react-reconciler/src/ReactFiberRoot';
 
 import ReactFiberReconciler from 'react-reconciler';
 import {batchedUpdates} from 'events/ReactGenericBatching';
-import {findCurrentFiberUsingSlowPath} from 'shared/ReactFiberTreeReflection';
+import {findCurrentFiberUsingSlowPath} from 'react-reconciler/reflection';
 import emptyObject from 'fbjs/lib/emptyObject';
 import {
   Fragment,
@@ -111,7 +111,7 @@ function removeChild(
   parentInstance.children.splice(index, 1);
 }
 
-var TestRenderer = ReactFiberReconciler({
+const TestRenderer = ReactFiberReconciler({
   getRootHostContext() {
     return emptyObject;
   },
@@ -195,11 +195,13 @@ var TestRenderer = ReactFiberReconciler({
     };
   },
 
-  scheduleDeferredCallback(fn: Function): void {
-    setTimeout(fn, 0, {timeRemaining: Infinity});
+  scheduleDeferredCallback(fn: Function): number {
+    return setTimeout(fn, 0, {timeRemaining: Infinity});
   },
 
-  useSyncScheduling: true,
+  cancelDeferredCallback(timeoutID: number): void {
+    clearTimeout(timeoutID);
+  },
 
   getPublicInstance,
 
@@ -250,7 +252,7 @@ var TestRenderer = ReactFiberReconciler({
   },
 });
 
-var defaultTestOptions = {
+const defaultTestOptions = {
   createNodeMock: function() {
     return null;
   },
@@ -285,8 +287,8 @@ function toJSON(inst: Instance | TextInstance): ReactTestRendererNode {
 }
 
 function nodeAndSiblingsTrees(nodeWithSibling: ?Fiber) {
-  var array = [];
-  var node = nodeWithSibling;
+  const array = [];
+  let node = nodeWithSibling;
   while (node != null) {
     array.push(node);
     node = node.sibling;
@@ -557,22 +559,26 @@ function propsMatch(props: Object, filter: Object): boolean {
   return true;
 }
 
-var ReactTestRendererFiber = {
+const ReactTestRendererFiber = {
   create(element: React$Element<any>, options: TestRendererOptions) {
-    var createNodeMock = defaultTestOptions.createNodeMock;
+    let createNodeMock = defaultTestOptions.createNodeMock;
     if (options && typeof options.createNodeMock === 'function') {
       createNodeMock = options.createNodeMock;
     }
-    var container = {
+    let container = {
       children: [],
       createNodeMock,
       tag: 'CONTAINER',
     };
-    var root: FiberRoot | null = TestRenderer.createContainer(container, false);
+    let root: FiberRoot | null = TestRenderer.createContainer(
+      container,
+      false,
+      false,
+    );
     invariant(root != null, 'something went wrong');
     TestRenderer.updateContainer(element, root, null, null);
 
-    var entry = {
+    const entry = {
       root: undefined, // makes flow happy
       // we define a 'getter' for 'root' below using 'Object.defineProperty'
       toJSON() {
@@ -603,7 +609,7 @@ var ReactTestRendererFiber = {
         if (root == null || root.current == null) {
           return;
         }
-        TestRenderer.updateContainer(null, root, null);
+        TestRenderer.updateContainer(null, root, null, null);
         container = null;
         root = null;
       },
